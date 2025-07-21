@@ -1,58 +1,134 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import './App.css';
-
-interface Forecast {
-    date: string;
-    temperatureC: number;
-    temperatureF: number;
-    summary: string;
-}
+import { apiService, LoginRequest, UrlMapping } from './services/api';
 
 function App() {
-    const [forecasts, setForecasts] = useState<Forecast[]>();
+    const [urls, setUrls] = useState<UrlMapping[]>([]);
+    const [originalUrl, setOriginalUrl] = useState('');
+    const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
 
     useEffect(() => {
-        populateWeatherData();
-    }, []);
+        if (token) {
+            fetchAllUrls();
+        }
+    }, [token]);
 
-    const contents = forecasts === undefined
-        ? <p><em>Loading... Please refresh once the ASP.NET backend has started. See <a href="https://aka.ms/jspsintegrationreact">https://aka.ms/jspsintegrationreact</a> for more details.</em></p>
-        : <table className="table table-striped" aria-labelledby="tableLabel">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Temp. (C)</th>
-                    <th>Temp. (F)</th>
-                    <th>Summary</th>
-                </tr>
-            </thead>
-            <tbody>
-                {forecasts.map(forecast =>
-                    <tr key={forecast.date}>
-                        <td>{forecast.date}</td>
-                        <td>{forecast.temperatureC}</td>
-                        <td>{forecast.temperatureF}</td>
-                        <td>{forecast.summary}</td>
-                    </tr>
-                )}
-            </tbody>
-        </table>;
+    const handleLogin = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            const credentials: LoginRequest = { username, password };
+            const response = await apiService.login(credentials);
+            localStorage.setItem('token', response.token);
+            setToken(response.token);
+            setUsername('');
+            setPassword('');
+        } catch (error) {
+            console.error('Login failed:', error);
+            alert('Invalid username or password');
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        setToken(null);
+        setUrls([]);
+    };
+
+    const fetchAllUrls = async () => {
+        try {
+            const allUrls = await apiService.getAllUrls();
+            setUrls(allUrls);
+        } catch (error) {
+            console.error('Failed to fetch URLs:', error);
+        }
+    };
+
+    const handleShortenUrl = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!originalUrl) return;
+
+        try {
+            await apiService.createShortUrl({ originalUrl });
+            setOriginalUrl('');
+            fetchAllUrls(); // Refresh the list after adding a new URL
+        } catch (error) {
+            console.error('Failed to shorten URL:', error);
+            alert('Error shortening URL. It might already exist.');
+        }
+    };
+
+    const handleDeleteUrl = async (id: number) => {
+        try {
+            await apiService.deleteUrl(id);
+            fetchAllUrls(); // Refresh the list
+        } catch (error) {
+            console.error('Failed to delete URL:', error);
+        }
+    };
+
+    if (!token) {
+        return (
+            <div className="container">
+                <h1>Login</h1>
+                <form onSubmit={handleLogin}>
+                    <input
+                        type="text"
+                        placeholder="Username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                    />
+                    <input
+                        type="password"
+                        placeholder="Password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                    />
+                    <button type="submit">Login</button>
+                </form>
+                <p>Hint: Use credentials admin/admin123 or user/user123</p>
+            </div>
+        );
+    }
 
     return (
-        <div>
-            <h1 id="tableLabel">Weather forecast</h1>
-            <p>This component demonstrates fetching data from the server.</p>
-            {contents}
+        <div className="container">
+            <button onClick={handleLogout} className="logout-button">Logout</button>
+            <h1>URL Shortener</h1>
+            <form onSubmit={handleShortenUrl}>
+                <input
+                    type="text"
+                    placeholder="Enter URL to shorten"
+                    value={originalUrl}
+                    onChange={(e) => setOriginalUrl(e.target.value)}
+                />
+                <button type="submit">Shorten</button>
+            </form>
+
+            <h2>Shortened URLs</h2>
+            <table className="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Original URL</th>
+                        <th>Short URL</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {urls.map(url => (
+                        <tr key={url.id}>
+                            <td><a href={url.originalUrl} target="_blank" rel="noopener noreferrer">{url.originalUrl}</a></td>
+                            <td><a href={url.shortUrl} target="_blank" rel="noopener noreferrer">{url.shortUrl}</a></td>
+                            <td>
+                                <button onClick={() => handleDeleteUrl(url.id)}>Delete</button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
-
-    async function populateWeatherData() {
-        const response = await fetch('weatherforecast');
-        if (response.ok) {
-            const data = await response.json();
-            setForecasts(data);
-        }
-    }
 }
 
 export default App;

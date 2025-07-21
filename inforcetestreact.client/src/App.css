@@ -1,11 +1,69 @@
-﻿#root {
-    max-width: 1280px;
-    margin: 0 auto;
+﻿/* Добавьте этот код в inforcetestreact.client/src/App.css */
+
+.container {
+    width: 100%;
+    max-width: 800px;
+    margin: 2rem auto;
     padding: 2rem;
-    text-align: center;
+    background-color: #2d2d2d;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
-th, td {
-    padding-left: 1rem;
-    padding-right: 1rem;
+.logout-button {
+    display: block;
+    margin-left: auto;
+    margin-bottom: 1rem;
 }
+
+form {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+    form input[type="text"],
+    form input[type="password"] {
+        flex-grow: 1;
+        padding: 0.8em 1.2em;
+        border-radius: 8px;
+        border: 1px solid #555;
+        background-color: #333;
+        color: #fff;
+        font-size: 1em;
+    }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+    table th,
+    table td {
+        padding: 0.8rem 1rem;
+        border-bottom: 1px solid #444;
+    }
+
+    table th {
+        font-weight: bold;
+    }
+
+    table a {
+        color: #64aeff;
+        text-decoration: none;
+    }
+
+        table a:hover {
+            text-decoration: underline;
+        }
+
+    table button {
+        background-color: #ff4d4d;
+        color: white;
+    }
+
+        table button:hover {
+            background-color: #e60000;
+            border-color: #ff4d4d;
+        }
