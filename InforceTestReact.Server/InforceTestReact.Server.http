@@ -1,0 +1,6 @@
+@InforceTestReact.Server_HostAddress = http://localhost:5258
+
+GET {{InforceTestReact.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
