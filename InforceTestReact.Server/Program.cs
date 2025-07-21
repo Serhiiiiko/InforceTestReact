@@ -9,59 +9,67 @@ using InforceTestReact.Server.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add services to the container.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddIdentity<User, IdentityRole>(options =>
 {
     options.Password.RequireDigit = false;
-    options.Password.RequireLowercase = false;
-    options.Password.RequireUppercase = false;
-    options.Password.RequireNonAlphanumeric = false;
     options.Password.RequiredLength = 6;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+    options.Password.RequireLowercase = false;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-// JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "SuperSecretKeyThatIsAtLeast32CharactersLong!";
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+// JWT Configuration
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
     {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(jwtKey)),
-            ValidateIssuer = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidateAudience = true,
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            ValidateLifetime = true
-        };
-    });
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"] ?? "SuperSecretKeyThatIsAtLeast32CharactersLong!"))
+    };
+});
+
+builder.Services.AddAuthorization();
 
 // Register services
-builder.Services.AddScoped<UrlService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<UrlService>();
 
-// CORS для React
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+// CORS configuration
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowReactApp", policy =>
+    options.AddPolicy("ReactApp", policy =>
     {
-        policy.WithOrigins("https://localhost:52662", "http://localhost:5173")
+        policy.WithOrigins("https://localhost:52662", "https://localhost:7264")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
 });
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-
 var app = builder.Build();
 
+// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -69,30 +77,34 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseCors("AllowReactApp");
+
+app.UseCors("ReactApp");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
 
+app.MapFallbackToFile("/index.html");
+
 // Seed data
 using (var scope = app.Services.CreateScope())
 {
-    var services = scope.ServiceProvider;
-    await SeedData(services);
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+
+    await SeedDataAsync(context, userManager, roleManager);
 }
 
 app.Run();
 
-static async Task SeedData(IServiceProvider services)
+async Task SeedDataAsync(ApplicationDbContext context, UserManager<User> userManager, RoleManager<IdentityRole> roleManager)
 {
-    var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
-    var userManager = services.GetRequiredService<UserManager<User>>();
-    var context = services.GetRequiredService<ApplicationDbContext>();
+    // Ensure database is created
+    context.Database.EnsureCreated();
 
-    await context.Database.EnsureCreatedAsync();
-
+    // Create roles
     if (!await roleManager.RoleExistsAsync("Admin"))
     {
         await roleManager.CreateAsync(new IdentityRole("Admin"));
@@ -103,10 +115,10 @@ static async Task SeedData(IServiceProvider services)
         await roleManager.CreateAsync(new IdentityRole("User"));
     }
 
-    var adminUser = await userManager.FindByNameAsync("admin");
-    if (adminUser == null)
+    // Create admin user
+    if (await userManager.FindByNameAsync("admin") == null)
     {
-        adminUser = new User
+        var adminUser = new User
         {
             UserName = "admin",
             Email = "admin@urlshortener.com",
@@ -114,22 +126,22 @@ static async Task SeedData(IServiceProvider services)
             LastName = "User"
         };
 
-        await userManager.CreateAsync(adminUser, "Admin123!");
+        await userManager.CreateAsync(adminUser, "admin123");
         await userManager.AddToRoleAsync(adminUser, "Admin");
     }
 
-    var testUser = await userManager.FindByNameAsync("testuser");
-    if (testUser == null)
+    // Create regular user
+    if (await userManager.FindByNameAsync("user") == null)
     {
-        testUser = new User
+        var regularUser = new User
         {
-            UserName = "testuser",
-            Email = "test@urlshortener.com",
-            FirstName = "Test",
+            UserName = "user",
+            Email = "user@urlshortener.com",
+            FirstName = "Regular",
             LastName = "User"
         };
 
-        await userManager.CreateAsync(testUser, "Test123!");
-        await userManager.AddToRoleAsync(testUser, "User");
+        await userManager.CreateAsync(regularUser, "user123");
+        await userManager.AddToRoleAsync(regularUser, "User");
     }
 }
